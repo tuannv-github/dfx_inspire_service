@@ -25,7 +25,7 @@ include_directories(
   include
 )
 
-link_libraries(unitree_sdk2 ddsc ddscxx rt pthread)
+link_libraries(unitree_sdk2 ddsc ddscxx rt pthread fmt spdlog)
 link_libraries(libboost_program_options.a)
 
 add_executable(inspire_g1 inspire_g1.cpp)
