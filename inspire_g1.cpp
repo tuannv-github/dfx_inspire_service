@@ -12,10 +12,9 @@ class InspireRunner
 public:
   InspireRunner()
   {
-    serial1 = std::make_shared<SerialPort>("/dev/ttyUSB1", B115200);
-    serial2 = std::make_shared<SerialPort>("/dev/ttyUSB2", B115200);
+    serial1 = std::make_shared<SerialPort>("/dev/inspire_right", B115200);
+    serial2 = std::make_shared<SerialPort>("/dev/inspire_left", B115200);
 
-    // If your left and right hand controls are reversed, you can swap the positions of `serial1` and `serial2` below.
     righthand = std::make_shared<inspire::InspireHand>(serial1, 1);
     lefthand = std::make_shared<inspire::InspireHand>(serial2, 1);
 
