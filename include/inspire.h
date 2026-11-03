@@ -2,6 +2,7 @@
 #define INSPIRE_H
 
 #include <eigen3/Eigen/Dense>
+#include <chrono>
 #include <vector>
 
 #include "SerialPort.h"
@@ -65,9 +66,11 @@ public:
 
     cmd[19] = CheckSum(cmd, 20);
 
+    serial_->flush_input();
     serial_->send(cmd, 20);
-    usleep(5000);
-    serial_->recv(recvBuff, 9);
+    // Consume the ack so its bytes cannot prefix the next position reply.
+    size_t ack_len = 0;
+    serial_->read_frame(recvBuff, sizeof(recvBuff), ack_len, 10);
     return 0;
   }
 
@@ -80,22 +83,37 @@ public:
   {
     std::vector<uint8_t> cmd = {0xEB, 0x90, id, 0x04, 0x11, 0x0A, 0x06, 0x0C, 0x00};
     cmd.back() = CheckSum(cmd.data(), cmd.size());
+    serial_->flush_input();
     serial_->send(cmd.data(), cmd.size());
 
-    usleep(5000);
-    size_t len = serial_->recv(recvBuff, 20);
-
-    if(len != 20) return 1;
-    if(recvBuff[19] != CheckSum(recvBuff, 20)) return 2;
-
-    q(0) = (recvBuff[7] | (recvBuff[8] << 8)) / 1000.;
-    q(1) = (recvBuff[9] | (recvBuff[10] << 8)) / 1000.;
-    q(2) = (recvBuff[11] | (recvBuff[12] << 8)) / 1000.;
-    q(3) = (recvBuff[13] | (recvBuff[14] << 8)) / 1000.;
-    q(4) = (recvBuff[15] | (recvBuff[16] << 8)) / 1000.;
-    q(5) = (recvBuff[17] | (recvBuff[18] << 8)) / 1000.;
-
-    return 0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+      int remain = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now()).count());
+      if (remain < 1)
+        remain = 1;
+      size_t len = 0;
+      if (!serial_->read_frame(recvBuff, sizeof(recvBuff), len, remain))
+        return 1;
+      // Angle reply: EB 90 id 0x0F 0x11 addr data[12] checksum.
+      if (len != 20 || recvBuff[2] != id || recvBuff[4] != 0x11)
+        continue;
+      uint16_t raw[6];
+      bool angles = true;
+      for (int i = 0; i < 6; ++i)
+      {
+        raw[i] = static_cast<uint16_t>(recvBuff[7 + 2 * i] | (recvBuff[8 + 2 * i] << 8));
+        if (raw[i] > 1000)
+          angles = false;
+      }
+      if (!angles)
+        continue;
+      for (int i = 0; i < 6; ++i)
+        q(i) = raw[i] / 1000.;
+      return 0;
+    }
+    return 1;
   }
 
   /**

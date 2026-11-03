@@ -25,6 +25,8 @@ public:
     handstate = std::make_unique<unitree::robot::RealTimePublisher<unitree_go::msg::dds_::MotorStates_>>(
         "rt/" + param::ns + "/state");
     handstate->msg_.states().resize(12);
+    qcmd.setOnes();
+    qstate.setOnes();
 
     // Start running
     thread = std::make_shared<unitree::common::RecurrentThread>(
